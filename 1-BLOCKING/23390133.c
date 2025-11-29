@@ -5,7 +5,7 @@
 #define TAG 999
 bool wantsToContinue(int rank); // δηλωση συναρτησης που ελεγχει αν ο χρηστης θελει να συνεχισει
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
 
     int rank;
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     
     MPI_Finalize(); // τερματισμος του mpi
     return 0; // επιστροφη εγκυρου status στην γονικη διεργασια για την εγκυρη εκτελεση του προγραμματος
-
+}
 
 bool wantsToContinue(int rank) {
     int choice;
