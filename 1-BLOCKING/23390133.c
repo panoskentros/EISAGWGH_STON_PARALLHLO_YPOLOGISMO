@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
 
    int * local_arr; // πινακας με τα τοπικα στοιχεια της καθε διεργασιας
    int * local_delta; // πινακας με το δελτα καθε διεργασιας
-   int elementsPerProc,local_max; // μεταβλητη που υπολογιζει ποσα στοιχεια θα εχει καθε διεργασια, μεταβλητη που υπολογιζει το max καθε διεργασιας
+   int local_max; // μεταβλητη που υπολογιζει ποσα στοιχεια θα εχει καθε διεργασια, μεταβλητη που υπολογιζει το max καθε διεργασιας
    float local_var=0.0,local_sum; // μεταβλητη που υπολογιζει το τοπικο var και το τοπικο sum
    
     while (wantsToContinue(rank)) { // οσο ο χρηστης θελει να προχωρησει εκτελειται ο κωδικας εντος του while 
@@ -24,19 +24,26 @@ int main(int argc, char *argv[]) {
             fprintf(stdout,"Δώσε αριθμό στοιχείων: \n");
             scanf("%d",&n); // αποθηκευουμε στη θεση μνημης της μεταβλητης size τον ακεραιο αριθμο των στοιχειων του διανυσματος
         
-            elementsPerProc = n/size; // θεωρω οτι n % p == 0 ωστε να διαιρουνται τελεια
-            local_arr = (int *)malloc(elementsPerProc*sizeof(int)); // δεσμευω την απαραιτητη μνημη για να χωρεσουν τα στοιχεια της διεργασιας με rank 0
+            int base = n / size; // ελαχιστος αριθμος στοιχειων ανα διεργασια
+            int rem  = n % size; // ειναι τα υπολοιπομενα στοιχεια αν n % size != 0 
+            int rankZeroElements; // τα στοιχεια που θα υπολογισει η διεργασια 0. δεν ειναι απαραιτητη η μεταβλητη αυτη
+            rankZeroElements = base + (rem > 0 ? 1 : 0); // δηλαδη p = 0 < rem οπως βλεπουμε και παρακατω. Ετσι καταφερνω την ομοιομορφη κατανομη των στοιχειων
+            // πχ αν n=9 size=4 τοτε base=2, η συνθηκη rem=1 > 0 ειναι αληθης αρα η διεργασια με ρανκ 0 θα υπολογισει 3 στοιχεια και οι υπολοιπες 2
+            // πχ αν n=10 size=4 τοτε base=2, η συνθηκη rem=2 > 0 για τη διεργασια με ρανκ 0 και 1 αρα οι δυο πρωτες διεργασιες θα υπολογισουν 3 στοιχεια η καθε μια και οι δυο τελευταιες διεργασιες απο 2 η καθε μια
+            local_arr = (int *)malloc(rankZeroElements*sizeof(int)); // δεσμευω την απαραιτητη μνημη για να χωρεσουν τα στοιχεια της διεργασιας με rank 0. Ξερω οτι παντα η διεργασια με ρανκ 0 θα υπολογιζει στοιχεια πληθους base
             if(local_arr==NULL){ // ελεγχος δεσμευσης μνημης
                 printf("Σφάλμα στην δέσμευση μνήμης\n");
                 exit(-1); // στην αποτυχια τερματιζω το προγραμμα
             }
+
             for (int p = 0; p < size; p++) {
+                int elementsPerProc = base + (p < rem ? 1 : 0); // υπολογισμος των στοιχειων ανα διεργασια
                 int *buffer = malloc(elementsPerProc * sizeof(int));// δεσμευω την απαραιτητη μνημη. Δεν χρειαζεται να δεσμευσω πινακα ισου μεγεθους με το size.
                 // δεσμευω την απαραιτητη μνημη για να χωραει ο αριθμος των στοιχειων ανα διεργασια
 
                 for (int j = 0; j < elementsPerProc; j++) { // διαβαζω τα στοιχεια απο το χρηστη
                     int val;
-                    printf("Δώσε αριθμό για το στοιχείο %d: \n", p * elementsPerProc + j + 1);
+                    printf("Δώσε αριθμό για το στοιχείο %d: \n", p * base + j + 1);
                     scanf("%d", &val);
                     buffer[j] = val; // τα αποθηκευω προσωρινα στο buffer 
                 }
@@ -44,7 +51,7 @@ int main(int argc, char *argv[]) {
                 if (p == 0) { // στη πρωτη επεναληψη διεργασια τα αποθηκευει στο local_arr. Το p δεν ειναι το ρανκ της τρεχουσας διεργασιας αλλα ο αριθμος της επαναληψης. 
                     //δηλαδη αν p == 1 αυτο σημαινει οτι τα στοιχεια που διαβασα πρεπει να τα στειλω στη διεργασια με rank 1. Η διεργασια που τα στελνει ειναι η διεργασια με ρανκ 0
                     // αυτο ειναι αντιληπτο απτη γραμμη 21 οπου εχω ελεγξει το ρανκ της διεργασιας. Επειδη p=0 και rank = 0 αντι να τα στειλω απλως τα αποθηκευω σε ενα τοπικο πινακα
-                    for (int j = 0; j < elementsPerProc; j++)
+                    for (int j = 0; j < rankZeroElements; j++)
                         local_arr[j] = buffer[j];
                 } else { // εδω rank = 0 παντα αλλα p != 0. Αυτό σημαίνει οτι η τρέχουσα διεργασία με ρανκ 0 πρεπει στειλει τα στοιχεια που διαβασε στη διεργασια με rank == p
                     MPI_Send(&elementsPerProc, 1, MPI_INT, p, TAG, MPI_COMM_WORLD); // αρχικα στελνω τον αριθμο των στοιχειων ωστε να ξερει η διεργασια p ποσα στοιχεια να διαβασει στο επομενο βημα
@@ -55,7 +62,8 @@ int main(int argc, char *argv[]) {
             
             local_max = local_arr[0]; //  η διεργασια με ρανκ 0 βαζει προσωρινα για μαξ το πρωτο στοιχειο του πινακα
             local_sum = local_arr[0]; // και για αθροισμα παλι το πρωτο στοιχειο
-            for (int i = 1; i < elementsPerProc; i++) { // ετσι μπορω να γλυτωσω 1 επαναληψη :)
+
+            for (int i = 1; i < rankZeroElements; i++) { // ετσι μπορω να γλυτωσω 1 επαναληψη. Η διεργασια με ρανκ 0 εχει παντα πληθος base στοιχεια
                 local_sum = local_sum + local_arr[i]; // προσθετω στο αθροισμα καθε στοιχειο του πινακα
                 if(local_arr[i]>local_max) // αν το τρεχον στοιχειο του πινακα ειναι μεγαλυτερο απτο μαξ τοτε το αναθετω
                     local_max = local_arr[i];
@@ -78,7 +86,7 @@ int main(int argc, char *argv[]) {
             for (int i = 1; i < size; i++)
                 MPI_Send(&total_avg,1,MPI_FLOAT,i,TAG,MPI_COMM_WORLD); // στελνω τη συνολικη μεση τιμη σε ολες τις διεργασιες επειδη θα χρειαστει σε επομενο ερωτημα
             
-            for (int i = 0; i < elementsPerProc; i++)
+            for (int i = 0; i < rankZeroElements; i++)
             {
                 local_var += (local_arr[i] - total_avg) * (local_arr[i] - total_avg); // υπολιγιζω για το ερωτημα (γ) το var της διεργασιας με rank == 0
             }
@@ -97,12 +105,17 @@ int main(int argc, char *argv[]) {
 
             // δ ερώτημα
             int *delta = (int *)malloc(n * sizeof(int)); // δεσμευω μνημη για τον πινακα δελτα
-            for (int i = 0; i < elementsPerProc; i++) // για τη διεργασια με rank == 0 υπολογιζω το τοπικο δελτα
-                delta[i] = (local_arr[i] - total_max) * (local_arr[i] - total_max);
-
-            for (int p = 1; p < size; p++) { // για τις υπολοιπες διεργασιες το διαβαζω
-                MPI_Recv(&delta[p * elementsPerProc], elementsPerProc, MPI_INT, p, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // αποθηκευω στο πινακα αρχιζοντας απο p*elementsPerProc δηλαδη:
-                // αν elementsPerProc = 3  και p = 3  τοτε θα γραψω στις θεσεις μνημνης delta[6], delta[7], delta[8]
+      
+            int offset = 0;
+            for (int p = 0; p < size; p++) {
+                int elementsPerProc = base + (p < rem ? 1 : 0);
+                if (p == 0) {
+                    for (int i = 0; i < elementsPerProc; i++)
+                        delta[i] = (local_arr[i] - total_max) * (local_arr[i] - total_max);
+                } else {
+                    MPI_Recv(&delta[offset], elementsPerProc, MPI_INT, p, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                }
+                offset += elementsPerProc;
             }
 
             printf("Δ vector: ");
@@ -111,18 +124,20 @@ int main(int argc, char *argv[]) {
             printf("\n");
 
             free(delta);
+        
 
         }else{ // διεργασιες με rank != 0
-            MPI_Recv(&elementsPerProc, 1, MPI_INT, 0, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // η διεργασια σταματαει την εκτελεση της εδω, μεχρι να λαβει το πληθος των στοιχειων (ένας ακέραιος) απο την πρώτη διεργασια (με ρανκ 0) 
-            local_arr = (int *)malloc(sizeof(int)*elementsPerProc); // δεσμευει την απαραιτητη μνημη για να χωρεσουν τα στοιχεια
+            int elems;
+            MPI_Recv(&elems, 1, MPI_INT, 0, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // η διεργασια σταματαει την εκτελεση της εδω, μεχρι να λαβει το πληθος των στοιχειων (ένας ακέραιος) απο την πρώτη διεργασια (με ρανκ 0) 
+            local_arr = (int *)malloc(sizeof(int)*elems); // δεσμευει την απαραιτητη μνημη για να χωρεσουν τα στοιχεια
             if(local_arr==NULL){ // ελεγχος δεσμευσης 
                 printf("Σφάλμα στην δέσμευση μνήμης\n");
                 exit(-1);
             }
-            MPI_Recv(local_arr, elementsPerProc, MPI_INT, 0, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // σταματαει την εκτελεση της εδω μεχρι να λαβει τον πινακα μεγεθους elementsPerProc με τα στοιχεια απτη διεργασια με ρανκ 0
+            MPI_Recv(local_arr, elems, MPI_INT, 0, TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // σταματαει την εκτελεση της εδω μεχρι να λαβει τον πινακα μεγεθους elems με τα στοιχεια απτη διεργασια με ρανκ 0
             local_max = local_arr[0]; // θετω το τοπικο μεγιστο με το πρωτο στοιχειο του πινακα για να γλυτωσω 1 επαναληψη
             local_sum = local_arr[0];
-            for (int i = 1; i < elementsPerProc; i++){ 
+            for (int i = 1; i < elems; i++){ 
                 local_sum = local_sum + local_arr[i]; // προσθετω το στοιχειο στο αθροισμα
                 if(local_arr[i]>local_max) // αν το στοιχειο ειναι μεγαλυτερο απτο μεγιστο τοτε αυτό θα γινει το πλεον μεγιστο
                     local_max = local_arr[i];
@@ -131,23 +146,24 @@ int main(int argc, char *argv[]) {
             MPI_Send(&local_max, 1, MPI_INT, 0, TAG, MPI_COMM_WORLD); // η διεργασια σταματαει την εκτελεση της εδω μεχρι να στειλει το τοπικο μεγιστο στην διεργασια με ρανκ 0
             float avg;
             MPI_Recv(&avg, 1, MPI_FLOAT, 0, TAG, MPI_COMM_WORLD,MPI_STATUS_IGNORE); // η διεργασια σταματαει την εκτελεση της εδω μεχρι να λαβει τη μεση τιμή του ερωτηματος (α) απο τη διεργασια με ρανκ 0
-            for (int i = 0; i < elementsPerProc; i++)
+            for (int i = 0; i < elems; i++)
             {
                 local_var += (local_arr[i] - avg) * (local_arr[i] - avg); // υπολογισμος της ταυτοτητας
             }
             MPI_Send(&local_var,1,MPI_FLOAT,0,TAG,MPI_COMM_WORLD); // η διεργασια σταματαει την εκτελεση της εδω μεχρι  να στειλει το τοπικο var στη διεργασια με ρανκ 0
             int total_max;
             MPI_Recv(&total_max,1,MPI_INT,0,TAG,MPI_COMM_WORLD,MPI_STATUS_IGNORE); // η διεργασια σταματαει την εκτελεση της εδω μεχρι να λαβει το ολικό μεγιστο του ερωτηματος (β) απο τη διεργασια με ρανκ 0
-            local_delta = (int *)malloc(elementsPerProc*sizeof(int));  // δεσμευση της απαραιτητης μνημης
+            local_delta = (int *)malloc(elems*sizeof(int));  // δεσμευση της απαραιτητης μνημης
             if(local_delta==NULL){ // ελεγχος δεσμευσης μνημης
                 printf("Σφάλμα στην δέσμευση μνήμης\n");
                 exit(-1);
             }
-            for (int i = 0; i < elementsPerProc; i++) // υπολογισμος της ταυτοτητας του δελτα για καθε στοιχειο
+            for (int i = 0; i < elems; i++) // υπολογισμος της ταυτοτητας του δελτα για καθε στοιχειο
                 local_delta[i] = (local_arr[i] - total_max) * (local_arr[i] - total_max);
             
-            MPI_Send(local_delta,elementsPerProc,MPI_INT,0,TAG,MPI_COMM_WORLD);  // η διεργασια σταματαει την εκτελεση της εδω μεχρι να στειλει το πινακα που περιεχει το δελτα του καθε στοιχειου στη διεργασια με ρανκ 0
+            MPI_Send(local_delta,elems,MPI_INT,0,TAG,MPI_COMM_WORLD);  // η διεργασια σταματαει την εκτελεση της εδω μεχρι να στειλει το πινακα που περιεχει το δελτα του καθε στοιχειου στη διεργασια με ρανκ 0
             
+            free(local_delta);
             
         }
         free(local_arr); // αποδεσμευση της μνημης του πινακα local_arr ωστε να γινει σωστο malloc σε περιπτωση συνεχειας της εκτελεσης της while λουπας
